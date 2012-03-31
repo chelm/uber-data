@@ -1,11 +1,13 @@
 import numpy as np 
 import math
 from datetime import datetime
+from datetime import date
+from PIL import Image
 import os.path
 
 class Model:
 
-  def __init__(self, bbox, matrix_file=None, nhours=None):
+  def __init__(self, bbox, matrix_file=None, frames=None):
     """ A simple matrix based prediction grid
 
         a time weighted grid for determining travel times
@@ -20,36 +22,38 @@ class Model:
       self.matrix = np.load(matrix_file)
       self.width  = self.matrix.shape[1]
       self.height = self.matrix.shape[0]
-      self.nhours = self.matrix.shape[2]
+      self.frames = self.matrix.shape[2]
 
     else: 
       self.width  = 1000 
       self.height = 1000 
-      self.nhours = nhours
-      self.matrix = np.zeros((self.width, self.height, self.nhours))
+      self.frames = frames
+      self.matrix = np.zeros((self.width, self.height, self.frames))
 
 
   def save(self, file):
     np.save(file, self.matrix)    
 
 
-  def hour(self, time):
+  def day(self, time):
     """ 
     Returns the hour from a time stamps 
     index of 0 to 23
 
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )
-    >>> m.hour("2007-01-07T10:54:50+00:00")
-    10
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
+    >>> m.day("2007-01-07T10:54:50+00:00")
+    6
     """
-    return self.time(time).hour
+    #return datetime.date.weekday(self.time(time))  
+    #return datetime.date.weekday(datetime.datetime.now())  
+    return date.weekday(self.time(time)) 
 
 
   def time(self, timestamp):
     """
     Returns a time object 
        
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
     >>> t = m.time("2007-01-07T10:54:50+00:00")
     >>> print t
     2007-01-07 10:54:50
@@ -60,7 +64,7 @@ class Model:
   def time_diff(self, t1, t2):
     """ Differences two times and returns the delta seconds
 
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
     >>> d = m.time_diff("2007-01-07T10:54:50+00:00", "2007-01-07T10:59:30+00:00")
     >>> print d
     280
@@ -73,7 +77,7 @@ class Model:
   def yx(self, lat, lon):
     """ Convert lat lon into pixels 
 
-    >>> m = Model( [-122.5, 37.5, -122, 38], './data/time_travel.npy' )
+    >>> m = Model( [-122.5, 37.5, -122, 38], './time_travel.npy' )
     >>> yx = m.yx(37.75, -122.25)
     >>> print yx[0], yx[1]
     500 500
@@ -83,6 +87,21 @@ class Model:
     x = int( math.floor( self.width * (abs(self.bbox[0] - float(lon)) / abs(self.bbox[0] - self.bbox[2])) ) )
     return [y, x]
 
+  def dist(self, p1, p2):
+    """ Simple euclidean distance between two points 
+
+    >>> m = Model( [-122.5, 37.5, -122, 38], './time_travel.npy')
+    >>> p1 = m.yx(37.75, -122.25)
+    >>> p2 = m.yx(37.77, -122.27)
+    >>> m.dist(p1,p2)
+    57.280013966478741
+    >>> m.dist(p1,p1)
+    0.0
+
+    """
+    return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
+    
+
 
   def train(self, p1, p2):
     """ Trains the model with two points
@@ -90,29 +109,33 @@ class Model:
         uses the time diff and delta xy to linearly 
         adjust time weights per cell   
 
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )  
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )  
     """
     xy1 = self.yx( p1[2], p1[3] ) 
     xy2 = self.yx( p2[2], p2[3] )
 
-    hour = self.hour( p2[1] )
+    day = self.day( p2[1] )
     delta = self.time_diff( p1[1], p2[1])
 
     # update the matrix model
-    self.learn(xy1, xy2, hour, float(delta))
+    self.learn(xy1, xy2, day, float(delta))
 
 
-  def vector(self, p1, p2, dx, dy ):
+  def vector(self, p1, p2):
     """ returns a pair vectors that we can use to extract times from the grid 
 
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )
-    >>> m.vector([200, 200], [202, 202], 2, 2)
-    (array([200, 201]), array([200, 201]))
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
+    >>> #m.vector([200, 200], [202, 202])
+    >>> #([200, 201], [200, 201])
+    >>> #sum(sum(m.matrix[[200, 201, 202], [200, 201, 202], :])) / 7
+    >>> sum(sum(m.matrix[[109, 110, 111, 112, 113, 114, 115, 116, 117, 118], [434, 435, 436, 437, 438, 439, 440, 441], :])) / 7
     """
-    #x = [ p1[1] ] if dx == 0 else np.arange( min( p1[1], p1[1] + dx ), max( p1[1], p1[1] + dx ) )
-    #y = [ p1[0] ] if dy == 0 else np.arange( min( p1[0], p1[0] + dy ), max( p1[0], p1[0] + dy ) )
-    x = [ p1[1] ] if dx == 0 else list( xrange( min( p1[1], p1[1] + dx ), max( p1[1], p1[1] + dx ) ) )
-    y = [ p1[0] ] if dy == 0 else list( xrange( min( p1[0], p1[0] + dy ), max( p1[0], p1[0] + dy ) ) )
+    dx = (p1[1] - p2[1]) + 1
+    dy = (p1[0] - p2[0]) + 1
+
+    x = [ p1[1] ] if dx == 0 else list( xrange( min( p1[1], p1[1]+dx ), max( p1[1], p1[1]+dx ) ) )
+    y = [ p1[0] ] if dy == 0 else list( xrange( min( p1[0], p1[0]+dy ), max( p1[0], p1[0]+dy ) ) )
+    
     return x, y
 
 
@@ -121,27 +144,25 @@ class Model:
   
     Linear dist. of times per cell
 
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
     """
-    dx = p1[1] - p2[1] + 1
-    dy = p1[0] - p2[0] + 1
+    distance = self.dist(p1, p2)
 
-    if abs(dx) + abs(dy) == 0:
+    if distance == 0:
       # update the p2 cell to avoid a double count
       x, y = p2[1], p2[0]
-      val = self.matrix[x, y, t_index]
+      val  = self.matrix[y, x, t_index]
+      incr = delta if val == 0 else delta / 2
 
-      if val == 0:
-        self.matrix[x, y, t_index] = delta 
-      else:
-        self.matrix[x, y, t_index] = ( val + delta ) / 2
+      self.matrix[y, x, t_index] = delta if val == 0 else val + incr
 
     else:
-      t_per_cell = (abs(dx) + abs(dy)) / delta if delta else 0
-      x, y = self.vector(p1, p2, dx, dy)
+      t_per_cell = distance / delta if delta else 0
+      x, y = self.vector(p1, p2)
       try: 
-        val = self.matrix[x, y, t_index]
-        self.matrix[x, y, t_index] = ( val + t_per_cell ) / 2 
+        val = self.matrix[y, x, t_index]
+        incr = delta if val == 0 else t_per_cell
+        self.matrix[y, x, t_index] += incr
       except: 
         pass
       
@@ -150,31 +171,54 @@ class Model:
   def predict(self, loc1, loc2, time=None):
     """ Predicts travel time across the grid 
 
-    >>> m = Model( [-122, 38, -121, 37], './data/time_travel.npy' )
-    >>> m.predict((37.795521, -122.419347), (37.795679, -122.409885), '2007-01-02T04:24:23+00:00')
-    3.22 minutes
+    >>> m = Model( [-122.5, 37.5, -122, 38], './time_travel.npy' )
+    >>> m.predict( (37.795521, -122.419347), (37.795679, -122.409885) )
+    '00:02:40'
     """
     p1 = self.yx(loc1[0], loc1[1])
     p2 = self.yx(loc2[0], loc2[1])
-    dx = p1[1] - p2[1] + 1
-    dy = p1[0] - p2[0] + 1
 
-    x, y = self.vector(p1, p2, dx, dy)
+    x, y = self.vector(p1, p2)
 
     if time: 
-      t_index = self.hour(time)
-      travel_time = np.sum(self.matrix[x, y, t_index])
+      t_index = self.day(time) - 1 
+      travel_time = sum( self.matrix[y, x, t_index]) 
     else:
-      travel_time = np.sum(( np.sum(self.matrix, axis=2) / 24)[x, y])
-    
-    print round(travel_time,2), 'minutes'
+      travel_time = sum( sum( self.matrix[y, x, :])) / self.frames 
+
+    return self.timeFormat(int( travel_time ))
+
+
+  def timeFormat(self, seconds):
+    """ Simple formating function
+
+    >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
+    >>> m.timeFormat( 244 )
+    '00:04:04'
+    """
+    hours = seconds / 3600
+    seconds -= 3600*hours
+    minutes = seconds / 60
+    seconds -= 60 * minutes
+    return "%02d:%02d:%02d" % (hours, minutes, seconds)
 
 
 
-  def visualize(self):
+  def visualize(self, index=None):
     """ create a 3D view of the matrix for each time
 
     """
+    if index:
+      self.matrix.dtype = 'uint8'
+      I = self.matrix[:, :, index]
+    else:
+      I = np.sum( self.matrix, axis=2) / self.frames
+      I.dtype = 'uint8'
+      print I.shape, I.dtype
+      I.reshape(8000,1000)
+      index = 'all'
+    resultImage = Image.fromarray(I)
+    resultImage.save('uber.' + str(index) + '.png')
     pass
 
 

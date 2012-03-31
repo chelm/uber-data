@@ -2,7 +2,7 @@ import gzip
 import os.path
 from scrubber import Scrubber 
 
-s = Scrubber(.1)
+s = Scrubber(.0125)
 file = './all.tsv.gz'
 
 # Make sure we've got the data file locally 
