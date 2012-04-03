@@ -20,6 +20,8 @@ One thing to note is the structure of the nd-array. Its a 1000 x 1000 x 7 grid o
 
 3. A grid based solution works, but a node graph solution would probably be better. Id like to experiment with using a graph database as the adaptation model, would be interesting for sure.  
 
+4. The training is slow, the time diff fn is to blame for this. If I create a time diff that was avoided using the time_delta fn in datetime itd be faster. 
+
 ### Running:
   
   > python task1_2.py

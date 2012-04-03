@@ -1,13 +1,12 @@
 import numpy as np 
 import math
-from datetime import datetime
-from datetime import date
+from datetime import datetime, date
 from PIL import Image
 import os.path
 
 class Model:
 
-  def __init__(self, bbox, matrix_file=None, frames=None):
+  def __init__(self, bbox, width=None, height=None, matrix_file=None, frames=None):
     """ A simple matrix based prediction grid
 
         a time weighted grid for determining travel times
@@ -25,10 +24,12 @@ class Model:
       self.frames = self.matrix.shape[2]
 
     else: 
-      self.width  = 1000 
-      self.height = 1000 
+      self.width  = width
+      self.height = height 
       self.frames = frames
-      self.matrix = np.zeros((self.width, self.height, self.frames))
+      self.matrix = np.zeros(( self.height, self.width, self.frames, 2))
+
+    print self.matrix.shape
 
 
   def save(self, file):
@@ -44,8 +45,6 @@ class Model:
     >>> m.day("2007-01-07T10:54:50+00:00")
     6
     """
-    #return datetime.date.weekday(self.time(time))  
-    #return datetime.date.weekday(datetime.datetime.now())  
     return date.weekday(self.time(time)) 
 
 
@@ -70,7 +69,7 @@ class Model:
     280
     
     """
-    diff = self.time(t2) - self.time(t1)
+    diff = abs(self.time(t2) - self.time(t1))
     return diff.seconds
 
 
@@ -99,11 +98,11 @@ class Model:
     0.0
 
     """
-    return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
+    return int( math.sqrt(((p2[0] - p1[0]) ** 2) + ((p2[1] - p1[1]) ** 2)) )
     
 
 
-  def train(self, p1, p2):
+  def train(self, p1, p2, day):
     """ Trains the model with two points
 
         uses the time diff and delta xy to linearly 
@@ -114,7 +113,7 @@ class Model:
     xy1 = self.yx( p1[2], p1[3] ) 
     xy2 = self.yx( p2[2], p2[3] )
 
-    day = self.day( p2[1] )
+    #day = self.day( p2[1] )
     delta = self.time_diff( p1[1], p2[1])
 
     # update the matrix model
@@ -147,25 +146,20 @@ class Model:
     >>> m = Model( [-122, 38, -121, 37], './time_travel.npy' )
     """
     distance = self.dist(p1, p2)
-
+    
     if distance == 0:
-      # update the p2 cell to avoid a double count
       x, y = p2[1], p2[0]
-      val  = self.matrix[y, x, t_index]
-      incr = delta if val == 0 else delta / 2
-
-      self.matrix[y, x, t_index] = delta if val == 0 else val + incr
-
     else:
-      t_per_cell = distance / delta if delta else 0
-      x, y = self.vector(p1, p2)
-      try: 
-        val = self.matrix[y, x, t_index]
-        incr = delta if val == 0 else t_per_cell
-        self.matrix[y, x, t_index] += incr
-      except: 
-        pass
-      
+      x, y = self.vector( p1, p2 )
+      delta = delta / (len(x)*len(y)) if delta else 0
+    
+    try:
+      for px in x:
+        for py in y:
+          self.matrix[ py, px, t_index, 0] += delta
+          self.matrix[ py, px, t_index, 1] += 1
+    except:
+      pass
 
   
   def predict(self, loc1, loc2, time=None):
@@ -179,13 +173,19 @@ class Model:
     p2 = self.yx(loc2[0], loc2[1])
 
     x, y = self.vector(p1, p2)
+    travel_time = 0
+    count = 0
 
     if time: 
-      t_index = self.day(time) - 1 
-      travel_time = sum( self.matrix[y, x, t_index]) 
+      t_index = self.day(time) 
+      for px in x:
+        for py in y:
+            travel_time += self.matrix[ py, px, t_index, 0] if ( self.matrix[ py, px, t_index, 1] == 0 ) else self.matrix[ py, px, t_index, 0]/self.matrix[ py, px, t_index, 1]
     else:
-      travel_time = sum( sum( self.matrix[y, x, :])) / self.frames 
-
+      for px in x:
+        for py in y:
+          travel_time += sum(self.matrix[ py, px, :, 0]) / sum(self.matrix[ py, px, :, 1])
+  
     return self.timeFormat(int( travel_time ))
 
 
@@ -208,16 +208,16 @@ class Model:
     """ create a 3D view of the matrix for each time
 
     """
+    self.matrix.dtype = 'uint8'
     if index:
-      self.matrix.dtype = 'uint8'
       I = self.matrix[:, :, index]
     else:
       I = np.sum( self.matrix, axis=2) / self.frames
+      print I.shape
       I.dtype = 'uint8'
-      print I.shape, I.dtype
-      I.reshape(8000,1000)
+      #I.reshape(2000,4000)
       index = 'all'
-    resultImage = Image.fromarray(I)
+    resultImage = Image.fromarray(I).convert('RGB')
     resultImage.save('uber.' + str(index) + '.png')
     pass
 
