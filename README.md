@@ -28,17 +28,15 @@ One thing to note is the structure of the nd-array. Its a 1000 x 1000 x 7 grid o
 
 ### Results: 
 
-* Task 1:
+* (output from running task1_2.py):
 
-  * 
-  *
-  *
+  * total1, total2
 
-* Task 2:
+  * 00:01:15, 00:01:03
 
-  *
-  *
-  *
+  * 00:02:27, 00:02:49
+  
+  * 00:00:19, 00:00:15
 
 
 ## Task 3

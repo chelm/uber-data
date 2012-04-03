@@ -29,8 +29,6 @@ class Model:
       self.frames = frames
       self.matrix = np.zeros(( self.height, self.width, self.frames, 2))
 
-    print self.matrix.shape
-
 
   def save(self, file):
     np.save(file, self.matrix)    
@@ -210,16 +208,16 @@ class Model:
     """
     self.matrix.dtype = 'uint8'
     if index:
-      I = self.matrix[:, :, index]
+      I = self.matrix[:, :, index, 0]
+      I.dtype = 'float32'
     else:
       I = np.sum( self.matrix, axis=2) / self.frames
-      print I.shape
-      I.dtype = 'uint8'
       #I.reshape(2000,4000)
       index = 'all'
-    resultImage = Image.fromarray(I).convert('RGB')
+    I.dtype = 'uint8'
+    print I.shape, I.dtype 
+    resultImage = Image.fromarray(I)
     resultImage.save('uber.' + str(index) + '.png')
-    pass
 
 
 

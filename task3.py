@@ -2,7 +2,7 @@ import gzip
 import os.path
 from scrubber import Scrubber 
 
-s = Scrubber(.0125)
+s = Scrubber(.025)
 file = './all.tsv.gz'
 
 # Make sure we've got the data file locally 
@@ -25,6 +25,6 @@ else:
       keep = s.keep( [ float(p1[2]), float(p1[3]) ], [ float(p2[2]), float(p2[3])] )
       if not keep:
         j += 1 
-        print i, keep, p1, p2
+        print 'Dropping point:', p2 #i, keep, p1, p2
   
     j += 1
