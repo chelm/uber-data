@@ -70,4 +70,6 @@ Results:
 * 48 Points are dropped at a threshold of .025 degrees 
 * 135 Points are dropped at a threshold of .0125 degrees 
 
-## Visualization  
+## Visualization
+
+Ive got some images going, have a cool viz tool in mind and am hacking on it. Wanted to share code anyway. 
